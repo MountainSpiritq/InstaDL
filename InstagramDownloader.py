@@ -10,37 +10,52 @@ class DownloaderApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Instagram Downloader")
+        self.root.geometry("600x400") 
         self.download_path = ""
+        self.listView=[]
         self.setup_gui()
 
     def setup_gui(self):
-        path_frame = tk.Frame(self.root)
-        path_frame.pack(pady=5)
+        path_frame = ttk.Frame(self.root)
+        path_frame.pack(fill='x', padx=15, pady=(15, 5))
 
-        self.path_label = tk.Label(path_frame, text="No folder selected", anchor='w')
-        self.path_label.pack(side=tk.LEFT, padx=5)
+        self.path_label = ttk.Label(path_frame, text="No folder selected", anchor='w')
+        self.path_label.pack(side=tk.LEFT, fill='x', expand=True)
 
-        tk.Button(path_frame, text="Select Download Directory 📁", command=self.get_directory).pack(side=tk.LEFT)
+        ttk.Button(path_frame, text="Select Download Directory 📁", command=self.get_directory).pack(side=tk.RIGHT)
 
-        url_frame = tk.Frame(self.root)
-        url_frame.pack(pady=5)
-        self.url_entry = tk.Entry( url_frame, width=50)
+        url_frame = ttk.Frame(self.root)
+        url_frame.pack(fill='x', padx=15, pady=5)
+
+        self.url_entry = ttk.Entry(url_frame)
         self.url_entry.insert(0, "Insta URLs go here")
-        self.url_entry.pack(side=tk.LEFT ,padx=10, pady=5)
+        self.url_entry.pack(side=tk.LEFT, fill='x', expand=True, padx=(0, 10))
         self.url_entry.bind("<FocusIn>", self.on_entry_clicked)
-        def onEnter(_):
+
+        def onEnter(event):
             self.start_download()
             self.on_entry_delete()
 
-        self.url_entry.bind('<Return>',onEnter)
-       
-        tk.Button(url_frame, text="Download", command=self.start_download).pack(pady=5)
+        self.url_entry.bind('<Return>', onEnter)
 
-        self.progress = ttk.Progressbar(self.root, orient="horizontal", length=400, mode="determinate")
-        self.progress.pack(pady=5)
+        ttk.Button(url_frame, text="Download", command=self.start_download).pack(side=tk.RIGHT)
 
-        self.status_label = tk.Label(self.root, text="")
-        self.status_label.pack()
+    
+        self.status_label = ttk.Label(self.root, text="", foreground='blue')
+        self.status_label.pack(fill='x', padx=15, pady=(10, 5))
+
+        listbox_frame = ttk.Frame(self.root)
+        listbox_frame.pack(fill='both', expand=True, padx=15, pady=(5, 15))
+
+        ttk.Label(listbox_frame, text="Downloaded Videos:", font=('Segoe UI', 11, 'bold')).pack(anchor='w', pady=(0,5))
+
+        self.listbox = tk.Listbox(listbox_frame, height=8)
+        self.listbox.pack(side=tk.LEFT, fill='both', expand=True)
+
+        scrollbar = ttk.Scrollbar(listbox_frame, orient=tk.VERTICAL, command=self.listbox.yview)
+        scrollbar.pack(side=tk.RIGHT, fill='y')
+
+        self.listbox.config(yscrollcommand=scrollbar.set)
 
     def get_directory(self):
         selected_folder = filedialog.askdirectory()
@@ -51,15 +66,15 @@ class DownloaderApp:
     def on_entry_clicked(self, event):
         if self.url_entry.get() == "Insta URLs go here":
             self.url_entry.delete(0, tk.END)
-            self.url_entry.config(fg='black')
+            self.url_entry.config(foreground='black')
 
     def on_entry_delete(self):
-            self.url_entry.delete(0, tk.END)
-            self.url_entry.config(fg='black')
+        self.url_entry.delete(0, tk.END)
+        self.url_entry.config(foreground='black')
 
     def start_download(self):
         url = self.url_entry.get()
-        if not url:
+        if not url or url == "Insta URLs go here":
             messagebox.showwarning("Input Required", "Please enter a URL.")
             return
 
@@ -71,19 +86,32 @@ class DownloaderApp:
 
     def download_video(self, url):
         def progress_hook(d):
+            
+            self.listView=list(filter(lambda i : i.get('info_dict').get('id')!=d.get('info_dict').get('id'),self.listView))
+            self.listView.append(d)
+
             if d['status'] == 'downloading':
                 percent = round(d.get('_percent', 0))
-                self.status_label.config(text=f"Downloading:{d.get('info_dict').get('title')} {percent}%")
+                title = d.get('info_dict').get('title')
+                self.status_label.config(text=f"Downloading: {title} {percent}%")
                 self.root.update_idletasks()
             elif d['status'] == 'finished':
-                self.status_label.config(text=f"Download of {d.get('info_dict').get('title')} completed.")
-                
+                title = d.get('info_dict').get('title')
+                self.status_label.config(text=f"Download of {title} completed.")
+
+            self.listbox.delete(0,tk.END)
+
+
+            for i in self.listView:
+                percent = round(i.get('_percent', 0))
+                self.listbox.insert(tk.END,f"{i.get('info_dict').get('title')} {percent}%")
 
         ydl_opts = {
             'format': 'bestvideo+bestaudio/best',
             'outtmpl': f'{self.download_path}/%(title)s.%(ext)s',
             'merge_output_format': 'mp4',
             'progress_hooks': [progress_hook],
+            
         }
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:

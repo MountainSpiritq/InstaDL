@@ -26,9 +26,14 @@ class DownloaderApp:
         url_frame.pack(pady=5)
         self.url_entry = tk.Entry( url_frame, width=50)
         self.url_entry.insert(0, "Insta URLs go here")
-        self.url_entry.pack(padx=10, pady=5)
+        self.url_entry.pack(side=tk.LEFT ,padx=10, pady=5)
         self.url_entry.bind("<FocusIn>", self.on_entry_clicked)
+        def onEnter(_):
+            self.start_download()
+            self.on_entry_delete()
 
+        self.url_entry.bind('<Return>',onEnter)
+       
         tk.Button(url_frame, text="Download", command=self.start_download).pack(pady=5)
 
         self.progress = ttk.Progressbar(self.root, orient="horizontal", length=400, mode="determinate")
@@ -48,6 +53,10 @@ class DownloaderApp:
             self.url_entry.delete(0, tk.END)
             self.url_entry.config(fg='black')
 
+    def on_entry_delete(self):
+            self.url_entry.delete(0, tk.END)
+            self.url_entry.config(fg='black')
+
     def start_download(self):
         url = self.url_entry.get()
         if not url:
@@ -63,15 +72,11 @@ class DownloaderApp:
     def download_video(self, url):
         def progress_hook(d):
             if d['status'] == 'downloading':
-                downloaded = d.get('downloaded_bytes', 0)
-                total = d.get('total_bytes', 1)
-                percent = int(downloaded / total * 100)
-                self.progress['value'] = percent
-                self.status_label.config(text=f"Downloading: {percent}%")
+                percent = round(d.get('_percent', 0))
+                self.status_label.config(text=f"Downloading:{d.get('info_dict').get('title')} {percent}%")
                 self.root.update_idletasks()
             elif d['status'] == 'finished':
-                self.progress['value'] = 100
-                self.status_label.config(text="Download complete.")
+                self.status_label.config(text=f"Download of {d.get('info_dict').get('title')} completed.")
                 
 
         ydl_opts = {

@@ -1,78 +1,90 @@
-import yt_dlp
-from tkinter import filedialog, messagebox,ttk
 import tkinter as tk
+from tkinter import ttk, filedialog, messagebox
+import threading
+import yt_dlp
 import static_ffmpeg
 
 static_ffmpeg.add_paths()
 
-download_path = ""
+class DownloaderApp:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Instagram Downloader")
+        self.download_path = ""
+        self.setup_gui()
 
-def downloadInstaVideo(url, path):
-    ydl_opts = {
-        'format': 'bestvideo+bestaudio/best',
-        'outtmpl': f'{path}/%(title)s.%(ext)s',
-        'merge_output_format': 'mp4',
-    }
+    def setup_gui(self):
+        path_frame = tk.Frame(self.root)
+        path_frame.pack(pady=5)
 
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        ydl.download([url])
+        self.path_label = tk.Label(path_frame, text="No folder selected", anchor='w')
+        self.path_label.pack(side=tk.LEFT, padx=5)
 
-def getDirectory():
-    global download_path
-    selected_folder = filedialog.askdirectory()
-    if selected_folder:
-        download_path = selected_folder
-        path_label.config(text=download_path)
-        messagebox.showinfo("Folder Selected", f"Download folder set to:\n{download_path}")
+        tk.Button(path_frame, text="Select Download Directory 📁", command=self.get_directory).pack(side=tk.LEFT)
 
-def startDownload(event=None):
-    url = url_entry.get()
-    if not url:
-        messagebox.showwarning("Input Required", "Please enter a URL.")
-        return
+        url_frame = tk.Frame(self.root)
+        url_frame.pack(pady=5)
+        self.url_entry = tk.Entry( url_frame, width=50)
+        self.url_entry.insert(0, "Insta URLs go here")
+        self.url_entry.pack(padx=10, pady=5)
+        self.url_entry.bind("<FocusIn>", self.on_entry_clicked)
 
-    if not download_path:
-        messagebox.showwarning("Directory Required", "Please select a download folder first.")
-        return        
+        tk.Button(url_frame, text="Download", command=self.start_download).pack(pady=5)
 
-    downloadInstaVideo(url, download_path)
+        self.progress = ttk.Progressbar(self.root, orient="horizontal", length=400, mode="determinate")
+        self.progress.pack(pady=5)
 
-def OnEntryClicked(event):
-    if url_entry.get() == "Insta url-s go here":
-        url_entry.delete(0, tk.END)
-        url_entry.config(fg='black')
+        self.status_label = tk.Label(self.root, text="")
+        self.status_label.pack()
 
-root = tk.Tk()
-root.title("Instagram Downloader")
+    def get_directory(self):
+        selected_folder = filedialog.askdirectory()
+        if selected_folder:
+            self.download_path = selected_folder
+            self.path_label.config(text=self.download_path)
 
-path_frame = tk.Frame(root)
-path_frame.pack(pady=5)
+    def on_entry_clicked(self, event):
+        if self.url_entry.get() == "Insta URLs go here":
+            self.url_entry.delete(0, tk.END)
+            self.url_entry.config(fg='black')
 
-path_label = tk.Label(path_frame, text="No folder selected", anchor='w')
-path_label.pack(side=tk.LEFT, padx=5)
+    def start_download(self):
+        url = self.url_entry.get()
+        if not url:
+            messagebox.showwarning("Input Required", "Please enter a URL.")
+            return
 
-tk.Button(path_frame, text="Select Download Directory 📁", command=getDirectory).pack(side=tk.LEFT)
+        if not self.download_path:
+            messagebox.showwarning("Directory Required", "Please select a download folder first.")
+            return
 
-url_entry = tk.Entry(root, width=50)
-url_entry.insert(0,"Insta url-s go here")
-url_entry.pack(padx=10, pady=5)
-url_entry.bind("<FocusIn>",OnEntryClicked)
-url_entry.bind("<FocusOut>", startDownload)
+        threading.Thread(target=self.download_video, args=(url,), daemon=True).start()
 
-frame = ttk.Frame(root)
-frame.pack(fill=tk.BOTH, expand=True)
+    def download_video(self, url):
+        def progress_hook(d):
+            if d['status'] == 'downloading':
+                downloaded = d.get('downloaded_bytes', 0)
+                total = d.get('total_bytes', 1)
+                percent = int(downloaded / total * 100)
+                self.progress['value'] = percent
+                self.status_label.config(text=f"Downloading: {percent}%")
+                self.root.update_idletasks()
+            elif d['status'] == 'finished':
+                self.progress['value'] = 100
+                self.status_label.config(text="Download complete.")
+                
 
-scrollbar = ttk.Scrollbar(frame)
-scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        ydl_opts = {
+            'format': 'bestvideo+bestaudio/best',
+            'outtmpl': f'{self.download_path}/%(title)s.%(ext)s',
+            'merge_output_format': 'mp4',
+            'progress_hooks': [progress_hook],
+        }
 
-listbox = tk.Listbox(frame, yscrollcommand=scrollbar.set)
-listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([url])
 
-scrollbar.config(command=listbox.yview)
-
-items = ["Item 1", "Item 2", "Item 3", "Item 4", "Item 5"]
-for item in items:
-    listbox.insert(tk.END, item)
-
-
-root.mainloop()
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = DownloaderApp(root)
+    root.mainloop()
